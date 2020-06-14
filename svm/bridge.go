@@ -228,8 +228,8 @@ func cSvmAppReceiptState(receipt []byte) ([]byte, error) {
 	cErr := cSvmByteArray{}
 
 	defer func() {
-		cReceipt.SvmFree()
-		cInitialState.Free()
+		cInitialState.SvmFree()
+		cReceipt.Free()
 		cErr.SvmFree()
 	}()
 
@@ -250,8 +250,8 @@ func cSvmAppReceiptAddr(receipt []byte) (Address, error) {
 	cErr := cSvmByteArray{}
 
 	defer func() {
-		cReceipt.SvmFree()
-		cAppAddr.Free()
+		cAppAddr.SvmFree()
+		cReceipt.Free()
 		cErr.SvmFree()
 	}()
 
@@ -363,8 +363,8 @@ func cSvmValidateTx(runtime Runtime, appTx []byte) (Address, error) {
 	cErr := cSvmByteArray{}
 
 	defer func() {
-		cAppTx.SvmFree()
-		cAppAddr.Free()
+		cAppAddr.SvmFree()
+		cAppTx.Free()
 		cErr.SvmFree()
 	}()
 
@@ -443,8 +443,8 @@ func cSvmExecReceiptReturns(receipt []byte) (Values, error) {
 	cErr := cSvmByteArray{}
 
 	defer func() {
-		cReceipt.SvmFree()
-		cReturns.Free()
+		cReturns.SvmFree()
+		cReceipt.Free()
 		cErr.SvmFree()
 	}()
 
