@@ -60,14 +60,13 @@ func cSvmImportFuncBuild(
 	return nil
 }
 
-func cSvmMemoryRuntimeCreate(runtime *unsafe.Pointer, kv, raw_kv, host, imports unsafe.Pointer) error {
+func cSvmMemoryRuntimeCreate(runtime *unsafe.Pointer, kv, host, imports unsafe.Pointer) error {
 	err := cSvmByteArray{}
 	defer err.SvmFree()
 
 	if res := C.svm_memory_runtime_create(
 		runtime,
 		kv,
-		raw_kv,
 		host,
 		imports,
 		&err,
@@ -82,20 +81,18 @@ func cSvmMemoryKVCreate(p *unsafe.Pointer) cSvmResultT {
 	return (cSvmResultT)(C.svm_memory_kv_create(p))
 }
 
-func cSvmMemoryRawKVCreate(p *unsafe.Pointer) cSvmResultT {
-	return (cSvmResultT)(C.svm_memory_kv_create2(p))
-}
-
-func cSvmEncodeAppTemplate(version int, name string, pageCount int, code []byte) ([]byte, error) {
+func cSvmEncodeAppTemplate(version int, name string, code []byte, dataLayout DataLayout) ([]byte, error) {
 	appTemplate := cSvmByteArray{}
 	cName := bytesCloneToSvmByteArray([]byte(name))
 	cCode := bytesCloneToSvmByteArray(code)
+	cDataLayout := bytesCloneToSvmByteArray(dataLayout.Encode())
 	err := cSvmByteArray{}
 
 	defer func() {
 		appTemplate.SvmFree()
 		cName.Free()
 		cCode.Free()
+		cDataLayout.Free()
 		err.SvmFree()
 	}()
 
@@ -103,8 +100,8 @@ func cSvmEncodeAppTemplate(version int, name string, pageCount int, code []byte)
 		&appTemplate,
 		C.uint(version),
 		cName,
-		C.ushort(pageCount),
 		cCode,
+		cDataLayout,
 		&err,
 	); res != cSvmSuccess {
 		return nil, err.svmError()
