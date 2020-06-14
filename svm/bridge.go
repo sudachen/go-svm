@@ -1,7 +1,7 @@
 package svm
 
 // #cgo LDFLAGS: -Wl,-rpath,${SRCDIR} -L${SRCDIR} -lsvm_runtime_c_api
-// #include "./svm.h"
+// #include "./include/svm.h"
 // #include <string.h>
 //
 import "C"
