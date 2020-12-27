@@ -4,12 +4,22 @@ package svm
 // #include "./svm.h"
 // #include <string.h>
 //
+// extern int svm_trampoline();
 import "C"
-
 import (
-	"fmt"
 	"unsafe"
 )
+
+//unsafe extern "C" fn trampoline(
+//env: *mut svm_env_t,
+//params: *const svm_byte_array,
+//results: *mut svm_byte_array,
+//) -> *mut svm_byte_array {
+
+//export svm_trampoline
+func svm_trampoline() C.int {
+	return 3
+}
 
 type cUchar = C.uchar
 type cUint = C.uint
@@ -22,34 +32,33 @@ func cSvmImportsAlloc(imports *unsafe.Pointer, count uint) cSvmResultT {
 	return (cSvmResultT)(C.svm_imports_alloc(imports, C.uint(count)))
 }
 
-func cSvmImportFuncBuild(
+func cSvmImportFuncNew(
 	imports Imports,
-	moduleName string,
-	importName string,
-	cgoFuncPointer unsafe.Pointer,
-	params ValueTypes,
-	returns ValueTypes,
+	namespace string,
+	name string,
+	importFunction ImportFunction,
 ) error {
 	cImports := imports.p
-	cModuleName := bytesCloneToSvmByteArray([]byte(moduleName))
-	cImportName := bytesCloneToSvmByteArray([]byte(importName))
-	cParams := bytesCloneToSvmByteArray(params.Encode())
-	cReturns := bytesCloneToSvmByteArray(returns.Encode())
+	cNamespace := bytesCloneToSvmByteArray([]byte(namespace))
+	cImportName := bytesCloneToSvmByteArray([]byte(name))
+	cParams := bytesCloneToSvmByteArray(importFunction.params.Encode())
+	cReturns := bytesCloneToSvmByteArray(importFunction.returns.Encode())
 	cErr := cSvmByteArray{}
 
 	defer func() {
-		cModuleName.Free()
+		cNamespace.Free()
 		cImportName.Free()
 		cParams.Free()
 		cReturns.Free()
 		cErr.SvmFree()
 	}()
 
-	if res := C.svm_import_func_build(
+	if res := C.svm_import_func_new(
 		cImports,
-		cModuleName,
+		cNamespace,
 		cImportName,
-		cgoFuncPointer,
+		(C.svm_func_callback_t)(C.svm_trampoline),
+		unsafe.Pointer(&importFunction.env),
 		cParams,
 		cReturns,
 		&cErr,
@@ -67,7 +76,6 @@ func cSvmMemoryRuntimeCreate(runtime *unsafe.Pointer, kv, host, imports unsafe.P
 	if res := C.svm_memory_runtime_create(
 		runtime,
 		kv,
-		host,
 		imports,
 		&err,
 	); res != cSvmSuccess {
@@ -78,7 +86,7 @@ func cSvmMemoryRuntimeCreate(runtime *unsafe.Pointer, kv, host, imports unsafe.P
 }
 
 func cSvmMemoryKVCreate(p *unsafe.Pointer) cSvmResultT {
-	return (cSvmResultT)(C.svm_memory_kv_create(p))
+	return (cSvmResultT)(C.svm_memory_state_kv_create(p))
 }
 
 func cSvmEncodeAppTemplate(version int, name string, code []byte, dataLayout DataLayout) ([]byte, error) {
@@ -132,12 +140,11 @@ func cSvmValidateTemplate(runtime Runtime, appTemplate []byte) error {
 	return nil
 }
 
-func cSvmDeployTemplate(runtime Runtime, appTemplate []byte, author Address, hostCtx []byte, gasMetering bool, gasLimit uint64) ([]byte, error) {
+func cSvmDeployTemplate(runtime Runtime, appTemplate []byte, author Address, gasMetering bool, gasLimit uint64) ([]byte, error) {
 	cReceipt := cSvmByteArray{}
 	cRuntime := runtime.p
 	cAppTemplate := bytesCloneToSvmByteArray(appTemplate)
 	cAuthor := bytesCloneToSvmByteArray(author[:])
-	cHostCtx := bytesCloneToSvmByteArray(hostCtx)
 	cGasMetering := C.bool(gasMetering)
 	cGasLimit := C.uint64_t(gasLimit)
 	cErr := cSvmByteArray{}
@@ -146,7 +153,6 @@ func cSvmDeployTemplate(runtime Runtime, appTemplate []byte, author Address, hos
 		cReceipt.SvmFree()
 		cAppTemplate.Free()
 		cAuthor.Free()
-		cHostCtx.Free()
 		cErr.SvmFree()
 	}()
 
@@ -155,7 +161,6 @@ func cSvmDeployTemplate(runtime Runtime, appTemplate []byte, author Address, hos
 		cRuntime,
 		cAppTemplate,
 		cAuthor,
-		cHostCtx,
 		cGasMetering,
 		cGasLimit,
 		&cErr,
@@ -166,56 +171,54 @@ func cSvmDeployTemplate(runtime Runtime, appTemplate []byte, author Address, hos
 	return svmByteArrayCloneToBytes(cReceipt), nil
 }
 
-func cSvmTemplateReceiptAddr(receipt []byte) (Address, error) {
-	cTemplateAddr := cSvmByteArray{}
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
+//func cSvmTemplateReceiptAddr(receipt []byte) (Address, error) {
+//	cTemplateAddr := cSvmByteArray{}
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cTemplateAddr.SvmFree()
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_template_receipt_addr(
+//		&cTemplateAddr,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return Address{}, cErr.svmError()
+//	}
+//
+//	return svmByteArrayCloneToAddress(cTemplateAddr), nil
+//}
 
-	defer func() {
-		cTemplateAddr.SvmFree()
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
+//func cSvmTemplateReceiptGas(receipt []byte) (uint64, error) {
+//	var cGasUsed C.uint64_t
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_template_receipt_gas(
+//		&cGasUsed,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return 0, cErr.svmError()
+//	}
+//
+//	return uint64(cGasUsed), nil
+//}
 
-	if res := C.svm_template_receipt_addr(
-		&cTemplateAddr,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return Address{}, cErr.svmError()
-	}
-
-	return svmByteArrayCloneToAddress(cTemplateAddr), nil
-}
-
-func cSvmTemplateReceiptGas(receipt []byte) (uint64, error) {
-	var cGasUsed C.uint64_t
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
-
-	defer func() {
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
-
-	if res := C.svm_template_receipt_gas(
-		&cGasUsed,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return 0, cErr.svmError()
-	}
-
-	return uint64(cGasUsed), nil
-}
-
-func cSvmSpawnApp(runtime Runtime, spawnApp []byte, creator Address, hostCtx []byte,
-	gasMetering bool, gasLimit uint64) ([]byte, error) {
+func cSvmSpawnApp(runtime Runtime, spawnApp []byte, creator Address, gasMetering bool, gasLimit uint64) ([]byte, error) {
 	cReceipt := cSvmByteArray{}
 	cRuntime := runtime.p
 	cSpawnApp := bytesCloneToSvmByteArray(spawnApp)
 	cCreator := bytesCloneToSvmByteArray(creator[:])
-	cHostCtx := bytesCloneToSvmByteArray(hostCtx)
 	cGasMetering := C.bool(gasMetering)
 	cGasLimit := C.uint64_t(gasLimit)
 	cErr := cSvmByteArray{}
@@ -224,7 +227,6 @@ func cSvmSpawnApp(runtime Runtime, spawnApp []byte, creator Address, hostCtx []b
 		cReceipt.SvmFree()
 		cSpawnApp.Free()
 		cCreator.Free()
-		cHostCtx.Free()
 		cErr.SvmFree()
 	}()
 
@@ -233,7 +235,6 @@ func cSvmSpawnApp(runtime Runtime, spawnApp []byte, creator Address, hostCtx []b
 		cRuntime,
 		cSpawnApp,
 		cCreator,
-		cHostCtx,
 		cGasMetering,
 		cGasLimit,
 		&cErr,
@@ -244,84 +245,83 @@ func cSvmSpawnApp(runtime Runtime, spawnApp []byte, creator Address, hostCtx []b
 	return svmByteArrayCloneToBytes(cReceipt), nil
 }
 
-func cSvmAppReceiptState(receipt []byte) ([]byte, error) {
-	cInitialState := cSvmByteArray{}
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
+//func cSvmAppReceiptState(receipt []byte) ([]byte, error) {
+//	cInitialState := cSvmByteArray{}
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cInitialState.SvmFree()
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_app_receipt_state(
+//		&cInitialState,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return nil, cErr.svmError()
+//	}
+//
+//	return svmByteArrayCloneToBytes(cInitialState), nil
+//}
 
-	defer func() {
-		cInitialState.SvmFree()
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
+//func cSvmAppReceiptAddr(receipt []byte) (Address, error) {
+//	cAppAddr := cSvmByteArray{}
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cAppAddr.SvmFree()
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_app_receipt_addr(
+//		&cAppAddr,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return Address{}, cErr.svmError()
+//	}
+//
+//	return svmByteArrayCloneToAddress(cAppAddr), nil
+//}
 
-	if res := C.svm_app_receipt_state(
-		&cInitialState,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return nil, cErr.svmError()
-	}
+//func cSvmAppReceiptGas(receipt []byte) (uint64, error) {
+//	var cGasUsed C.uint64_t
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_app_receipt_gas(
+//		&cGasUsed,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return 0, cErr.svmError()
+//	}
+//
+//	return uint64(cGasUsed), nil
+//}
 
-	return svmByteArrayCloneToBytes(cInitialState), nil
-}
-
-func cSvmAppReceiptAddr(receipt []byte) (Address, error) {
-	cAppAddr := cSvmByteArray{}
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
-
-	defer func() {
-		cAppAddr.SvmFree()
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
-
-	if res := C.svm_app_receipt_addr(
-		&cAppAddr,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return Address{}, cErr.svmError()
-	}
-
-	return svmByteArrayCloneToAddress(cAppAddr), nil
-}
-
-func cSvmAppReceiptGas(receipt []byte) (uint64, error) {
-	var cGasUsed C.uint64_t
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
-
-	defer func() {
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
-
-	if res := C.svm_app_receipt_gas(
-		&cGasUsed,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return 0, cErr.svmError()
-	}
-
-	return uint64(cGasUsed), nil
-}
-
-func cSvmEncodeSpawnApp(version int, templateAddr Address, ctorIndex uint16, ctorBuffer []byte, ctorArgs Values) ([]byte, error) {
+func cSvmEncodeSpawnApp(version int, templateAddr Address, name string, ctorName string, calldata []byte) ([]byte, error) {
 	spawnApp := cSvmByteArray{}
 	cVersion := C.uint(version)
 	cTemplateAddr := bytesCloneToSvmByteArray(templateAddr[:])
-	cCtorIndex := C.ushort(ctorIndex)
-	cCtorBuffer := bytesCloneToSvmByteArray(ctorBuffer)
-	cCtorArgs := bytesCloneToSvmByteArray(ctorArgs.Encode())
+	cName := bytesCloneToSvmByteArray([]byte(ctorName))
+	cCtorName := bytesCloneToSvmByteArray([]byte(ctorName))
+	cCalldata := bytesCloneToSvmByteArray(calldata)
 	cErr := cSvmByteArray{}
 
 	defer func() {
 		spawnApp.SvmFree()
 		cTemplateAddr.Free()
-		cCtorBuffer.Free()
 		cErr.SvmFree()
 	}()
 
@@ -329,9 +329,9 @@ func cSvmEncodeSpawnApp(version int, templateAddr Address, ctorIndex uint16, cto
 		&spawnApp,
 		cVersion,
 		cTemplateAddr,
-		cCtorIndex,
-		cCtorBuffer,
-		cCtorArgs,
+		cName,
+		cCtorName,
+		cCalldata,
 		&cErr,
 	); res != cSvmSuccess {
 		return nil, cErr.svmError()
@@ -364,23 +364,21 @@ func cSvmValidateApp(runtime Runtime, app []byte) error {
 func cSvmEncodeAppTx(
 	version int,
 	AppAddr Address,
-	funcIndex uint16,
-	funcBuffer []byte,
-	funcArgs Values,
+	funcName string,
+	calldata []byte,
 ) ([]byte, error) {
 	appTx := cSvmByteArray{}
 	cVersion := C.uint(version)
 	cTemplateAddr := bytesCloneToSvmByteArray(AppAddr[:])
-	cFuncIndex := C.ushort(funcIndex)
-	cFuncBuffer := bytesCloneToSvmByteArray(funcBuffer)
-	cFuncArgs := bytesCloneToSvmByteArray(funcArgs.Encode())
+	cFuncName := bytesCloneToSvmByteArray([]byte(funcName))
+	cCalldata := bytesCloneToSvmByteArray(calldata)
 	cErr := cSvmByteArray{}
 
 	defer func() {
 		appTx.SvmFree()
 		cTemplateAddr.Free()
-		cFuncBuffer.Free()
-		cFuncArgs.Free()
+		cFuncName.Free()
+		cCalldata.Free()
 		cErr.SvmFree()
 	}()
 
@@ -388,9 +386,8 @@ func cSvmEncodeAppTx(
 		&appTx,
 		cVersion,
 		cTemplateAddr,
-		cFuncIndex,
-		cFuncBuffer,
-		cFuncArgs,
+		cFuncName,
+		cCalldata,
 		&cErr,
 	); res != cSvmSuccess {
 		return nil, cErr.svmError()
@@ -423,13 +420,12 @@ func cSvmValidateTx(runtime Runtime, appTx []byte) (Address, error) {
 	return svmByteArrayCloneToAddress(cAppAddr), nil
 }
 
-func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, hostCtx []byte, gasMetering bool,
+func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, gasMetering bool,
 	gasLimit uint64) ([]byte, error) {
 	cReceipt := cSvmByteArray{}
 	cRuntime := runtime.p
 	cAppTx := bytesCloneToSvmByteArray(appTx)
 	cAppState := bytesCloneToSvmByteArray(appState)
-	cHostCtx := bytesCloneToSvmByteArray(hostCtx)
 	cGasMetering := C.bool(gasMetering)
 	cGasLimit := C.uint64_t(gasLimit)
 	cErr := cSvmByteArray{}
@@ -438,7 +434,6 @@ func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, hostCtx []byte,
 		cReceipt.SvmFree()
 		cAppTx.Free()
 		cAppState.Free()
-		cHostCtx.Free()
 		cErr.SvmFree()
 	}()
 
@@ -447,7 +442,6 @@ func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, hostCtx []byte,
 		cRuntime,
 		cAppTx,
 		cAppState,
-		cHostCtx,
 		cGasMetering,
 		cGasLimit,
 		&cErr,
@@ -458,78 +452,78 @@ func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, hostCtx []byte,
 	return svmByteArrayCloneToBytes(cReceipt), nil
 }
 
-func cSvmExecReceiptState(receipt []byte) ([]byte, error) {
-	cNewState := cSvmByteArray{}
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
+//func cSvmExecReceiptState(receipt []byte) ([]byte, error) {
+//	cNewState := cSvmByteArray{}
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cNewState.SvmFree()
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_exec_receipt_state(
+//		&cNewState,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return nil, cErr.svmError()
+//	}
+//
+//	return svmByteArrayCloneToBytes(cNewState), nil
+//}
 
-	defer func() {
-		cNewState.SvmFree()
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
+//func cSvmExecReceiptReturns(receipt []byte) (Values, error) {
+//	cReturns := cSvmByteArray{}
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cReturns.SvmFree()
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_exec_receipt_returns(
+//		&cReturns,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return nil, cErr.svmError()
+//	}
+//
+//	var nativeReturns Values
+//	if err := (&nativeReturns).Decode(svmByteArrayCloneToBytes(cReturns)); err != nil {
+//		return nil, fmt.Errorf("failed to decode returns: %v", err)
+//	}
+//
+//	return nativeReturns, nil
+//}
 
-	if res := C.svm_exec_receipt_state(
-		&cNewState,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return nil, cErr.svmError()
-	}
-
-	return svmByteArrayCloneToBytes(cNewState), nil
-}
-
-func cSvmExecReceiptReturns(receipt []byte) (Values, error) {
-	cReturns := cSvmByteArray{}
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
-
-	defer func() {
-		cReturns.SvmFree()
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
-
-	if res := C.svm_exec_receipt_returns(
-		&cReturns,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return nil, cErr.svmError()
-	}
-
-	var nativeReturns Values
-	if err := (&nativeReturns).Decode(svmByteArrayCloneToBytes(cReturns)); err != nil {
-		return nil, fmt.Errorf("failed to decode returns: %v", err)
-	}
-
-	return nativeReturns, nil
-}
-
-func cSvmExecReceiptGas(receipt []byte) (uint64, error) {
-	var cGasUsed C.uint64_t
-	cReceipt := bytesCloneToSvmByteArray(receipt)
-	cErr := cSvmByteArray{}
-
-	defer func() {
-		cReceipt.Free()
-		cErr.SvmFree()
-	}()
-
-	if res := C.svm_exec_receipt_gas(
-		&cGasUsed,
-		cReceipt,
-		&cErr,
-	); res != cSvmSuccess {
-		return 0, cErr.svmError()
-	}
-
-	return uint64(cGasUsed), nil
-}
+//func cSvmExecReceiptGas(receipt []byte) (uint64, error) {
+//	var cGasUsed C.uint64_t
+//	cReceipt := bytesCloneToSvmByteArray(receipt)
+//	cErr := cSvmByteArray{}
+//
+//	defer func() {
+//		cReceipt.Free()
+//		cErr.SvmFree()
+//	}()
+//
+//	if res := C.svm_exec_receipt_gas(
+//		&cGasUsed,
+//		cReceipt,
+//		&cErr,
+//	); res != cSvmSuccess {
+//		return 0, cErr.svmError()
+//	}
+//
+//	return uint64(cGasUsed), nil
+//}
 
 func cSvmInstanceContextHostGet(ctx unsafe.Pointer) unsafe.Pointer {
-	return C.svm_instance_context_host_get(ctx)
+	return nil //C.svm_instance_context_host_get(ctx)
 }
 
 func cSvmByteArrayDestroy(ba cSvmByteArray) {
@@ -545,7 +539,7 @@ func cSvmImportsDestroy(imports Imports) {
 }
 
 func cSvmMemKVDestroy(kv MemKVStore) {
-	C.svm_memory_kv_destroy(kv.p)
+	C.svm_state_kv_destroy(kv.p)
 }
 
 func cFree(p unsafe.Pointer) {

@@ -1,6 +1,6 @@
 (module
-  (func $get32 (import "svm" "get32") (param i32) (result i32))
-  (func $set32 (import "svm" "set32") (param i32 i32))
+  (func $get32 (import "svm" "svm_get32") (param i32) (result i32))
+  (func $set32 (import "svm" "svm_set32") (param i32 i32))
   (func $env_inc (import "env" "inc") (param i32))
   (func $env_get (import "env" "get") (result i32))
 

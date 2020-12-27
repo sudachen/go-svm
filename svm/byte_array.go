@@ -6,6 +6,11 @@ import (
 	"unsafe"
 )
 
+func charToBytes(dest []byte, src *C.char) {
+	n := len(dest)
+	copy(dest, (*(*[1024]byte)(unsafe.Pointer(src)))[:n:n])
+}
+
 func bytesCloneToSvmByteArray(b []byte) cSvmByteArray {
 	var ba cSvmByteArray
 	ba.FromBytesClone(b)

@@ -1,5 +1,6 @@
 package svm
 
+import "C"
 import (
 	"fmt"
 	"reflect"
@@ -19,17 +20,15 @@ type ImportFunction struct {
 	// An implementation must be of type:
 	// `func(ctx unsafe.Pointer, arguments ...interface{}) interface{}`.
 	// It represents the real function implementation written in Go.
-	implementation interface{}
-
-	// The pointer to the cgo function implementation,
-	// something like `C.foo`.
-	cgoPointer unsafe.Pointer
+	//implementation interface{}
 
 	// The namespace of the imported function.
 	namespace string
 
+	env functionEnvironment
+
 	// The function implementation signature as a WebAssembly signature.
-	args ValueTypes
+	params ValueTypes
 
 	// The function implementation signature as a WebAssembly signature.
 	returns ValueTypes
@@ -56,18 +55,21 @@ func (ib ImportsBuilder) Namespace(namespace string) ImportsBuilder {
 	return ib
 }
 
-func (ib ImportsBuilder) AppendFunction(name string, implementation interface{}, cgoPointer unsafe.Pointer) (ImportsBuilder, error) {
-	args, returns, err := validateImport(name, implementation)
-	if err != nil {
-		return ImportsBuilder{}, err
+func (ib ImportsBuilder) AppendFunction(name string, params ValueTypes, returns ValueTypes, impl hostFunction) (ImportsBuilder, error) {
+	//params, returns, err := validateImport(name, impl)
+	//if err != nil {
+	//	return ImportsBuilder{}, err
+	//}
+
+	env := functionEnvironment{
+		function: impl,
 	}
 
 	namespace := ib.currentNamespace
 	ib.imports[name] = ImportFunction{
-		implementation,
-		cgoPointer,
 		namespace,
-		args,
+		env,
+		params,
 		returns,
 	}
 
@@ -82,13 +84,11 @@ func (ib ImportsBuilder) Build() (Imports, error) {
 	}
 
 	for importName, importFunction := range ib.imports {
-		if err := cSvmImportFuncBuild(
+		if err := cSvmImportFuncNew(
 			imports,
 			importFunction.namespace,
 			importName,
-			importFunction.cgoPointer,
-			importFunction.args,
-			importFunction.returns,
+			importFunction,
 		); err != nil {
 			return Imports{}, fmt.Errorf("failed to build import `%v`: %v", importName, err)
 		}
@@ -112,10 +112,10 @@ func validateImport(name string, implementation interface{}) (args ValueTypes, r
 		return
 	}
 
-	if importType.In(0).Kind() != reflect.UnsafePointer {
-		err = fmt.Errorf("the runtime context of the `%s` imported function must be of kind `unsafe.Pointer`; given `%s`", name, importType.In(0).Kind())
-		return
-	}
+	//if importType.In(0).Kind() != reflect.UnsafePointer {
+	//	err = fmt.Errorf("the runtime context of the `%s` imported function must be of kind `unsafe.Pointer`; given `%s`", name, importType.In(0).Kind())
+	//	return
+	//}
 
 	inputArity--
 
@@ -137,7 +137,8 @@ func validateImport(name string, implementation interface{}) (args ValueTypes, r
 		}
 	}
 
-	if outputArity > 1 {
+	//if outputArity > 1 {
+	if outputArity > 999 {
 		err = fmt.Errorf("the `%s` imported function must have at most one output value", name)
 		return
 	} else if outputArity == 1 {

@@ -22,13 +22,13 @@ func TestAddress(t *testing.T) {
 
 		if i > AddressLen {
 			testAddress(
-				bytesToAddress(b[:i]),
-				bytesToAddress(b[:AddressLen]),
+				BytesToAddress(b[:i]),
+				BytesToAddress(b[:AddressLen]),
 			)
 		} else {
 			testAddress(
-				bytesToAddress(b[:i]),
-				bytesToAddress(b[:i]),
+				BytesToAddress(b[:i]),
+				BytesToAddress(b[:i]),
 			)
 		}
 	}
