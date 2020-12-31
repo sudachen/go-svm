@@ -25,7 +25,7 @@ type ImportFunction struct {
 	// The namespace of the imported function.
 	namespace string
 
-	env functionEnvironment
+	env unsafe.Pointer
 
 	// The function implementation signature as a WebAssembly signature.
 	params ValueTypes
@@ -44,7 +44,7 @@ type ImportsBuilder struct {
 
 func NewImportsBuilder() ImportsBuilder {
 	var imports = make(map[string]ImportFunction)
-	var currentNamespace = "env"
+	var currentNamespace = "host"
 
 	return ImportsBuilder{imports, currentNamespace}
 }
@@ -55,23 +55,25 @@ func (ib ImportsBuilder) Namespace(namespace string) ImportsBuilder {
 	return ib
 }
 
-func (ib ImportsBuilder) AppendFunction(name string, params ValueTypes, returns ValueTypes, impl hostFunction) (ImportsBuilder, error) {
+func (ib ImportsBuilder) AppendFunction(name string, params ValueTypes, returns ValueTypes, function hostFunction) (ImportsBuilder, error) {
 	//params, returns, err := validateImport(name, impl)
 	//if err != nil {
 	//	return ImportsBuilder{}, err
 	//}
 
 	env := functionEnvironment{
-		function: impl,
+		hostFunctionStoreIndex: hostFunctionStore.store(function),
 	}
 
 	namespace := ib.currentNamespace
 	ib.imports[name] = ImportFunction{
 		namespace,
-		env,
+		unsafe.Pointer(&env),
 		params,
 		returns,
 	}
+
+	fmt.Printf("POINTER: %v\n", ib.imports[name].env)
 
 	return ib, nil
 }

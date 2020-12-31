@@ -4,27 +4,62 @@ package svm
 // #include "./svm.h"
 // #include <string.h>
 //
-// extern int svm_trampoline();
+// extern svm_byte_array* svm_trampoline(
+// 	 svm_env_t *env,
+//   /* const */ svm_byte_array *args,
+//   svm_byte_array *results
+// );
 import "C"
 import (
 	"unsafe"
 )
 
-//unsafe extern "C" fn trampoline(
-//env: *mut svm_env_t,
-//params: *const svm_byte_array,
-//results: *mut svm_byte_array,
-//) -> *mut svm_byte_array {
-
 //export svm_trampoline
-func svm_trampoline() C.int {
-	return 3
+func svm_trampoline(env *C.svm_env_t, args *C.svm_byte_array, results *C.svm_byte_array) *C.svm_byte_array {
+	hostEnv := (*functionEnvironment)(env.host_env)
+
+	function, err := hostFunctionStore.load(hostEnv.hostFunctionStoreIndex)
+	if err != nil {
+		panic(err)
+	}
+
+	arguments := Values{}
+	err = arguments.Decode(svmByteArrayCloneToBytes(*args))
+	if err != nil {
+		panic(err)
+	}
+
+	returns, err := function(arguments)
+	if err != nil {
+		panic("ERROR!")
+	}
+
+	b := Values(returns).Encode()
+	*results = bytesCloneToSvmByteArray(b)
+
+	//arguments := toValueList(args)
+	//results, err := (hostFunction.function)(arguments)
+	//
+	//if err != nil {
+	//	trap := NewTrap(hostFunction.store, err.Error())
+	//
+	//	runtime.KeepAlive(trap)
+	//
+	//	return trap.inner()
+	//}
+	//
+	//toValueVec(results, res)
+	//
+
+	return nil
 }
 
-type cUchar = C.uchar
-type cUint = C.uint
-type cSvmByteArray = C.svm_byte_array
-type cSvmResultT = C.svm_result_t
+type (
+	cUchar        = C.uchar
+	cUint         = C.uint
+	cSvmByteArray = C.svm_byte_array
+	cSvmResultT   = C.svm_result_t
+)
 
 const cSvmSuccess = (C.svm_result_t)(C.SVM_SUCCESS)
 
@@ -58,7 +93,7 @@ func cSvmImportFuncNew(
 		cNamespace,
 		cImportName,
 		(C.svm_func_callback_t)(C.svm_trampoline),
-		unsafe.Pointer(&importFunction.env),
+		importFunction.env,
 		cParams,
 		cReturns,
 		&cErr,
@@ -420,11 +455,11 @@ func cSvmValidateTx(runtime Runtime, appTx []byte) (Address, error) {
 	return svmByteArrayCloneToAddress(cAppAddr), nil
 }
 
-func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, gasMetering bool,
+func cSvmExecApp(runtime Runtime, tx []byte, appState []byte, gasMetering bool,
 	gasLimit uint64) ([]byte, error) {
 	cReceipt := cSvmByteArray{}
 	cRuntime := runtime.p
-	cAppTx := bytesCloneToSvmByteArray(appTx)
+	cTx := bytesCloneToSvmByteArray(tx)
 	cAppState := bytesCloneToSvmByteArray(appState)
 	cGasMetering := C.bool(gasMetering)
 	cGasLimit := C.uint64_t(gasLimit)
@@ -432,7 +467,7 @@ func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, gasMetering boo
 
 	defer func() {
 		cReceipt.SvmFree()
-		cAppTx.Free()
+		cTx.Free()
 		cAppState.Free()
 		cErr.SvmFree()
 	}()
@@ -440,7 +475,7 @@ func cSvmExecApp(runtime Runtime, appTx []byte, appState []byte, gasMetering boo
 	if res := C.svm_exec_app(
 		&cReceipt,
 		cRuntime,
-		cAppTx,
+		cTx,
 		cAppState,
 		cGasMetering,
 		cGasLimit,

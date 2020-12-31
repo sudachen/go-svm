@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"go-svm/codec"
 	"go-svm/svm"
 	"io/ioutil"
-	"os"
+	"runtime"
 	"unsafe"
 )
 
@@ -39,26 +40,17 @@ var closure counter
 var host counter
 
 func main() {
-	// 1) Initialize runtime.
+	// Initialize svmRuntime.
 	ib := svm.NewImportsBuilder()
 
 	ib, err := ib.AppendFunction(
-		"inc",
+		"counter_mul",
+		svm.ValueTypes{svm.TypeI32, svm.TypeI32},
 		svm.ValueTypes{svm.TypeI32},
-		svm.ValueTypes{},
 		func(args []svm.Value) ([]svm.Value, error) {
-			closure.value += args[0].ToI32()
-			return []svm.Value{}, nil
-		},
-	)
-	noError(err)
-
-	ib, err = ib.AppendFunction(
-		"get",
-		svm.ValueTypes{},
-		svm.ValueTypes{svm.TypeI32},
-		func(_ []svm.Value) ([]svm.Value, error) {
-			return []svm.Value{svm.I32(host.value)}, nil
+			//closure.value += args[0].ToI32()
+			//	res := args[0].ToI32() * args[1].ToI32()
+			return []svm.Value{svm.I32(args[0].ToI32())}, nil
 		},
 	)
 	noError(err)
@@ -73,32 +65,32 @@ func main() {
 
 	host := unsafe.Pointer(&host)
 
-	runtime, err := svm.NewRuntimeBuilder().
+	svmRuntime, err := svm.NewRuntimeBuilder().
 		WithImports(imports).
 		WithMemKVStore(kv).
 		WithHost(host).
 		Build()
 	noError(err)
-	defer runtime.Free()
-	fmt.Printf("1) Runtime: %v\n\n", runtime)
+	defer svmRuntime.Free()
+	fmt.Printf("1) Runtime: %v\n\n", svmRuntime)
 
 	version := 0
 	gasMetering := false
 	gasLimit := uint64(0)
 
-	// 2) Deploy Template.
-	// TODO: add on-the-fly wat2wasm translation
-	code, err := ioutil.ReadFile("counter_template.wasm")
-	dataLayout := svm.DataLayout{4}
+	// Generate Deploy Template tx.
+	code, err := ioutil.ReadFile("./wasm/counter.wasm")
 	noError(err)
 	name := "name"
+	dataLayout := svm.DataLayout{4}
+	tx, err := codec.Get().EncodeTxDeployTemplate(version, name, code, dataLayout.Encode())
+	noError(err)
+
+	// Deploy Template.
 	author := svm.Address{}
 	deployTemplateReceipt, err := deployTemplate(
-		runtime,
-		code,
-		dataLayout,
-		version,
-		name,
+		svmRuntime,
+		tx,
 		author,
 		gasMetering,
 		gasLimit,
@@ -106,101 +98,113 @@ func main() {
 	noError(err)
 	fmt.Printf("2) %v\n", deployTemplateReceipt)
 
-	os.Exit(0)
-
-	// 3) Spawn App.
-	creator := svm.Address{}
-	spawnAppResult, err := spawnApp(
-		runtime,
+	// Generate Spawn App tx.
+	calldata, err := codec.Get().EncodeCallData([]string{"u32"}, []int{10})
+	noError(err)
+	tx, err = codec.Get().EncodeTxSpawnApp(
 		version,
-		deployTemplateReceipt.TemplateAddr,
+		deployTemplateReceipt.TemplateAddr[:],
 		name,
-		"storage_inc",
-		[]byte(nil), // TODO: FIX. encode svm.Values{svm.I32(5)},
+		"initialize",
+		calldata,
+	)
+	noError(err)
+
+	// Spawn App.
+	creator := svm.Address{}
+	spawnAppReceipt, err := spawnApp(
+		svmRuntime,
+		tx,
 		creator,
 		gasMetering,
 		gasLimit,
 	)
 	noError(err)
-	fmt.Printf("3) %v\n", spawnAppResult)
+	fmt.Printf("3) %v\n", spawnAppReceipt)
 
-	// 4) Exec App
-	// 4.0) Storage value increment.
-	execAppResult, err := execApp(
-		runtime,
+	// Generate Exec App tx.
+	calldata, err = codec.Get().EncodeCallData(
+		[]string{"u32", "u32"},
+		[]int{3, 5},
+	)
+	noError(err)
+	tx, err = codec.Get().EncodeTxExecApp(
 		version,
-		spawnAppResult.AppAddr,
-		"storage_inc",
-		[]byte(nil), // TODO: FIX. encode svm.Values{svm.I32(5)},
-		spawnAppResult.InitialState,
+		spawnAppReceipt.AppAddr[:],
+		"add_and_mul",
+		calldata,
+	)
+	noError(err)
+
+	// Exec App.
+	receiptExecApp, err := execApp(
+		svmRuntime,
+		tx,
+		spawnAppReceipt.State,
 		gasMetering,
 		gasLimit,
 	)
-	fmt.Printf("4.0) %v\n", execAppResult)
+	fmt.Printf("4.0) %v\n", receiptExecApp)
 
-	// 4.1) Storage value get.
-	execAppResult, err = execApp(
-		runtime,
-		version,
-		spawnAppResult.AppAddr,
-		"storage_get",
-		[]byte(nil), //svm.Values(nil), // TODO: FIX
-		execAppResult.NewState,
-		gasMetering,
-		gasLimit,
-	)
-	fmt.Printf("4.1) %v\n", execAppResult)
+	returndata, err := codec.Get().DecodeReturndata(receiptExecApp.Returndata)
+	noError(err)
 
-	// 4.2) Host import function value increment.
-	execAppResult, err = execApp(
-		runtime,
-		version,
-		spawnAppResult.AppAddr,
-		"host_inc",
-		[]byte(nil), //svm.Values{svm.I32(25)}, TODO: FIX
-		execAppResult.NewState,
-		gasMetering,
-		gasLimit,
-	)
-	fmt.Printf("4.2) %v\n", execAppResult)
+	fmt.Printf("4.0) %v\n", returndata)
 
-	// 4.3) Host import function value get.
-	execAppResult, err = execApp(
-		runtime,
-		version,
-		spawnAppResult.AppAddr,
-		"host_get",
-		[]byte(nil), // svm.Values(nil), TODO: FIX
-		execAppResult.NewState,
-		gasMetering,
-		gasLimit,
-	)
-	fmt.Printf("4.3) %v\n", execAppResult)
+	runtime.KeepAlive(ib)
+
+	//// 4.1) Storage value get.
+	//execAppResult, err = execApp(
+	//	svmRuntime,
+	//	version,
+	//	spawnAppReceipt.AppAddr,
+	//	"storage_get",
+	//	[]byte(nil), //svm.Values(nil), // TODO: FIX
+	//	execAppResult.NewState,
+	//	gasMetering,
+	//	gasLimit,
+	//)
+	//fmt.Printf("4.1) %v\n", execAppResult)
+	//
+	//// 4.2) Host import function value increment.
+	//execAppResult, err = execApp(
+	//	svmRuntime,
+	//	version,
+	//	spawnAppReceipt.AppAddr,
+	//	"host_inc",
+	//	[]byte(nil), //svm.Values{svm.I32(25)}, TODO: FIX
+	//	execAppResult.NewState,
+	//	gasMetering,
+	//	gasLimit,
+	//)
+	//fmt.Printf("4.2) %v\n", execAppResult)
+	//
+	//// 4.3) Host import function value get.
+	//execAppResult, err = execApp(
+	//	svmRuntime,
+	//	version,
+	//	spawnAppReceipt.AppAddr,
+	//	"host_get",
+	//	[]byte(nil), // svm.Values(nil), TODO: FIX
+	//	execAppResult.NewState,
+	//	gasMetering,
+	//	gasLimit,
+	//)
+	//fmt.Printf("4.3) %v\n", execAppResult)
 }
 
 func deployTemplate(
 	runtime svm.Runtime,
-	code []byte,
-	dataLayout svm.DataLayout,
-	version int,
-	name string,
+	appTemplate []byte,
 	author svm.Address,
 	gasMetering bool,
 	gasLimit uint64,
 ) (*svm.DeployTemplateReceipt, error) {
-	appTemplate, err := svm.EncodeAppTemplate(
-		version,
-		name,
-		code,
-		dataLayout,
-	)
-	if err != nil {
-		return nil, err
-	}
 
-	if err = svm.ValidateTemplate(runtime, appTemplate); err != nil {
-		return nil, err
-	}
+	// TODO: validation is temporarily disabled due to pending issues. Should be re-enabled.
+	//if err = svm.ValidateTemplate(runtime, appTemplate); err != nil {
+	//	return nil, err
+	//}
 
 	res, err := svm.DeployTemplate(
 		runtime,
@@ -218,33 +222,18 @@ func deployTemplate(
 
 func spawnApp(
 	runtime svm.Runtime,
-	version int,
-	templateAddr svm.Address,
-	name string,
-	ctorName string,
-	calldata []byte,
+	tx []byte,
 	creator svm.Address,
 	gasMetering bool,
 	gasLimit uint64,
 ) (*svm.SpawnAppReceipt, error) {
-	spawnApp, err := svm.EncodeSpawnApp(
-		version,
-		templateAddr,
-		name,
-		ctorName,
-		calldata,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = svm.ValidateApp(runtime, spawnApp); err != nil {
+	if err := svm.ValidateApp(runtime, tx); err != nil {
 		return nil, err
 	}
 
 	res, err := svm.SpawnApp(
 		runtime,
-		spawnApp,
+		tx,
 		creator,
 		gasMetering,
 		gasLimit,
@@ -258,34 +247,16 @@ func spawnApp(
 
 func execApp(
 	runtime svm.Runtime,
-	version int,
-	appAddr svm.Address,
-	funcName string,
-	calldata []byte,
+	tx []byte,
 	appState []byte,
 	gasMetering bool,
 	gasLimit uint64,
-) (*svm.ExecAppResult, error) {
-	appTx, err := svm.EncodeAppTx(
-		version,
-		appAddr,
-		funcName,
-		calldata,
-	)
-	if err != nil {
+) (*svm.ExecAppReceipt, error) {
+	if _, err := svm.ValidateAppTx(runtime, tx); err != nil {
 		return nil, err
 	}
 
-	if _, err = svm.ValidateAppTx(runtime, appTx); err != nil {
-		return nil, err
-	}
-
-	execAppResult, err := svm.ExecApp(runtime, appTx, appState, gasMetering, gasLimit)
-	if err != nil {
-		return nil, err
-	}
-
-	return execAppResult, nil
+	return svm.ExecApp(runtime, tx, appState, gasMetering, gasLimit)
 }
 
 func noError(err error) {

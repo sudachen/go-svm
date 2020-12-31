@@ -1,15 +1,64 @@
 package svm
 
 import "C"
-
-type hostFunction func([]Value) ([]Value, error)
+import (
+	"fmt"
+	"sync"
+)
 
 type functionEnvironment struct {
-	function hostFunction
+	hostFunctionStoreIndex uint
 }
 
 type Function struct {
 	environment *functionEnvironment
+}
+
+type hostFunction func([]Value) ([]Value, error)
+
+var hostFunctionStore = hostFunctions{
+	functions: make(map[uint]hostFunction),
+}
+
+type hostFunctions struct {
+	sync.RWMutex
+	functions map[uint]hostFunction
+}
+
+func (self *hostFunctions) load(index uint) (hostFunction, error) {
+	hostFunction, exists := self.functions[index]
+
+	if exists && hostFunction != nil {
+		return hostFunction, nil
+	}
+
+	return nil, fmt.Errorf("host function `%d` does not exist", index)
+}
+
+func (self *hostFunctions) store(function hostFunction) uint {
+	self.Lock()
+	// By default, the index is the size of the store.
+	index := uint(len(self.functions))
+
+	for nth, hostFunc := range self.functions {
+		// Find the first empty slot in the store.
+		if hostFunc == nil {
+			// Use that empty slot for the index.
+			index = nth
+			break
+		}
+	}
+
+	self.functions[index] = function
+	self.Unlock()
+
+	return index
+}
+
+func (self *hostFunctions) remove(index uint) {
+	self.Lock()
+	self.functions[index] = nil
+	self.Unlock()
 }
 
 //func NewFunction(function hostFunction, ty FunctionType) *Function {
