@@ -7,7 +7,7 @@ import (
 )
 
 func TestCodec_EncodeCallData(t *testing.T) {
-	c, err := newCodec()
+	c, err := newInstance()
 	require.NoError(t, err)
 
 	rawCallData, err := c.EncodeCallData([]string{"i32"}, []int{-10})
@@ -16,7 +16,7 @@ func TestCodec_EncodeCallData(t *testing.T) {
 }
 
 func TestCodec_DecodeDeployTemplateReceipt(t *testing.T) {
-	c, err := newCodec()
+	c, err := newInstance()
 	require.NoError(t, err)
 
 	rawReceipt, err := hex.DecodeString("0001bc213ffe5f285adf9b2df9975a98a8f3b8106bf7a02fda0000")

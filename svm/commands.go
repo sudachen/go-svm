@@ -10,7 +10,7 @@ func DeployTemplate(runtime Runtime, appTemplate []byte, author Address, gasMete
 		return nil, err
 	}
 
-	return codec.Get().DecodeReceiptDeployTemplate(rawReceipt)
+	return codec.DecodeReceiptDeployTemplate(rawReceipt)
 }
 
 func SpawnApp(runtime Runtime, spawnAppData []byte, creator Address,
@@ -20,7 +20,7 @@ func SpawnApp(runtime Runtime, spawnAppData []byte, creator Address,
 		return nil, err
 	}
 
-	return codec.Get().DecodeReceiptSpawnApp(rawReceipt)
+	return codec.DecodeReceiptSpawnApp(rawReceipt)
 }
 
 func ExecApp(runtime Runtime, tx, appState []byte, gasMetering bool, gasLimit uint64) (*ExecAppReceipt, error) {
@@ -29,5 +29,5 @@ func ExecApp(runtime Runtime, tx, appState []byte, gasMetering bool, gasLimit ui
 		return nil, err
 	}
 
-	return codec.Get().DecodeReceiptExecApp(rawReceipt)
+	return codec.DecodeReceiptExecApp(rawReceipt)
 }

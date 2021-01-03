@@ -18,32 +18,29 @@ type (
 	ReceiptExecApp        = common.ReceiptExecApp
 )
 
-type SvmCodec struct {
-	instance *wasmer.Instance
-}
-
 const (
-	OkMarker  = 1
-	ErrMarker = 0
+	markerErr = 0
+	markerOk  = 1
 )
 
 var (
-	codec *SvmCodec
+	instance *wasmer.Instance
 )
 
 func init() {
 	var err error
-	codec, err = newCodec(codecWasmFilePath())
+	instance, err = newInstance(codecWasmFilePath())
 	if err != nil {
 		panic(err)
 	}
 }
 
-func Get() *SvmCodec {
-	return codec
+func codecWasmFilePath() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(file, "../../svm/svm_codec.wasm")
 }
 
-func newCodec(filename string) (*SvmCodec, error) {
+func newInstance(filename string) (*wasmer.Instance, error) {
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -62,10 +59,10 @@ func newCodec(filename string) (*SvmCodec, error) {
 		return nil, err
 	}
 
-	return &SvmCodec{instance}, nil
+	return instance, nil
 }
 
-func (c *SvmCodec) EncodeTxDeployTemplate(version int, name string, code []byte, data []byte) ([]byte, error) {
+func EncodeTxDeployTemplate(version int, name string, code []byte, data []byte) ([]byte, error) {
 	txJson, err := json.Marshal(struct {
 		Version int    `json:"version"`
 		Name    string `json:"name"`
@@ -81,12 +78,12 @@ func (c *SvmCodec) EncodeTxDeployTemplate(version int, name string, code []byte,
 		return nil, err
 	}
 
-	argPtr, err := c.newBuffer(txJson)
+	argPtr, err := newBuffer(txJson)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_deploy_template")
+	fn, err := instance.Exports.GetFunction("wasm_deploy_template")
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +93,10 @@ func (c *SvmCodec) EncodeTxDeployTemplate(version int, name string, code []byte,
 		return nil, err
 	}
 
-	return c.loadBuffer(retPtr.(int32))
+	return loadBuffer(retPtr.(int32))
 }
 
-func (c *SvmCodec) EncodeTxSpawnApp(version int, templateAddr []byte, name string, ctorName string, calldata []byte) ([]byte, error) {
+func EncodeTxSpawnApp(version int, templateAddr []byte, name string, ctorName string, calldata []byte) ([]byte, error) {
 	txJson, err := json.Marshal(struct {
 		Version      int    `json:"version"`
 		TemplateAddr string `json:"template"`
@@ -117,12 +114,12 @@ func (c *SvmCodec) EncodeTxSpawnApp(version int, templateAddr []byte, name strin
 		return nil, err
 	}
 
-	argPtr, err := c.newBuffer(txJson)
+	argPtr, err := newBuffer(txJson)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_encode_spawn_app")
+	fn, err := instance.Exports.GetFunction("wasm_encode_spawn_app")
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +129,10 @@ func (c *SvmCodec) EncodeTxSpawnApp(version int, templateAddr []byte, name strin
 		return nil, err
 	}
 
-	return c.loadBuffer(retPtr.(int32))
+	return loadBuffer(retPtr.(int32))
 }
 
-func (c *SvmCodec) EncodeTxExecApp(version int, appAddr []byte, funcName string, calldata []byte) ([]byte, error) {
+func EncodeTxExecApp(version int, appAddr []byte, funcName string, calldata []byte) ([]byte, error) {
 	txJson, err := json.Marshal(struct {
 		Version  int    `json:"version"`
 		AppAddr  string `json:"app"`
@@ -151,12 +148,12 @@ func (c *SvmCodec) EncodeTxExecApp(version int, appAddr []byte, funcName string,
 		return nil, err
 	}
 
-	argPtr, err := c.newBuffer(txJson)
+	argPtr, err := newBuffer(txJson)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_encode_exec_app")
+	fn, err := instance.Exports.GetFunction("wasm_encode_exec_app")
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +163,10 @@ func (c *SvmCodec) EncodeTxExecApp(version int, appAddr []byte, funcName string,
 		return nil, err
 	}
 
-	return c.loadBuffer(retPtr.(int32))
+	return loadBuffer(retPtr.(int32))
 }
 
-func (c *SvmCodec) EncodeCallData(abi []string, data []int) ([]byte, error) {
+func EncodeCallData(abi []string, data []int) ([]byte, error) {
 	calldataJson, err := json.Marshal(struct {
 		ABI  []string `json:"abi"`
 		Data []int    `json:"data"`
@@ -181,12 +178,12 @@ func (c *SvmCodec) EncodeCallData(abi []string, data []int) ([]byte, error) {
 		return nil, err
 	}
 
-	argPtr, err := c.newBuffer(calldataJson)
+	argPtr, err := newBuffer(calldataJson)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_encode_calldata")
+	fn, err := instance.Exports.GetFunction("wasm_encode_calldata")
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +193,7 @@ func (c *SvmCodec) EncodeCallData(abi []string, data []int) ([]byte, error) {
 		return nil, err
 	}
 
-	ret, err := c.loadBuffer(retPtr.(int32))
+	ret, err := loadBuffer(retPtr.(int32))
 	if err != nil {
 		return nil, err
 	}
@@ -216,11 +213,10 @@ func (c *SvmCodec) EncodeCallData(abi []string, data []int) ([]byte, error) {
 		return nil, fmt.Errorf("invalid hex string: %s", calldata)
 	}
 
-	return bytes[1:], nil
+	return bytes, nil
 }
 
-func (c *SvmCodec) DecodeReturndata(rawReturndata []byte) (string, error) {
-	//	a := append([]byte{1}, rawReturndata...)
+func DecodeReturndata(rawReturndata []byte) (string, error) {
 	calldataJson, err := json.Marshal(struct {
 		Calldata string `json:"calldata"`
 	}{
@@ -231,12 +227,12 @@ func (c *SvmCodec) DecodeReturndata(rawReturndata []byte) (string, error) {
 		return "", err
 	}
 
-	argPtr, err := c.newBuffer(calldataJson)
+	argPtr, err := newBuffer(calldataJson)
 	if err != nil {
 		return "", err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_decode_calldata")
+	fn, err := instance.Exports.GetFunction("wasm_decode_calldata")
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +242,7 @@ func (c *SvmCodec) DecodeReturndata(rawReturndata []byte) (string, error) {
 		return "", err
 	}
 
-	ret, err := c.loadBuffer(retPtr.(int32))
+	ret, err := loadBuffer(retPtr.(int32))
 	if err != nil {
 		return "", err
 	}
@@ -259,8 +255,8 @@ func (c *SvmCodec) DecodeReturndata(rawReturndata []byte) (string, error) {
 	return string(ret), nil
 }
 
-func (c *SvmCodec) DecodeReceiptDeployTemplate(rawReceipt []byte) (*ReceiptDeployTemplate, error) {
-	v, err := c.decodeReceipt(rawReceipt)
+func DecodeReceiptDeployTemplate(rawReceipt []byte) (*ReceiptDeployTemplate, error) {
+	v, err := decodeReceipt(rawReceipt)
 	if err != nil {
 		return nil, err
 	}
@@ -268,8 +264,8 @@ func (c *SvmCodec) DecodeReceiptDeployTemplate(rawReceipt []byte) (*ReceiptDeplo
 	return v.(*ReceiptDeployTemplate), nil
 }
 
-func (c *SvmCodec) DecodeReceiptSpawnApp(rawReceipt []byte) (*ReceiptSpawnApp, error) {
-	v, err := c.decodeReceipt(rawReceipt)
+func DecodeReceiptSpawnApp(rawReceipt []byte) (*ReceiptSpawnApp, error) {
+	v, err := decodeReceipt(rawReceipt)
 	if err != nil {
 		return nil, err
 	}
@@ -277,8 +273,8 @@ func (c *SvmCodec) DecodeReceiptSpawnApp(rawReceipt []byte) (*ReceiptSpawnApp, e
 	return v.(*ReceiptSpawnApp), nil
 }
 
-func (c *SvmCodec) DecodeReceiptExecApp(rawReceipt []byte) (*ReceiptExecApp, error) {
-	v, err := c.decodeReceipt(rawReceipt)
+func DecodeReceiptExecApp(rawReceipt []byte) (*ReceiptExecApp, error) {
+	v, err := decodeReceipt(rawReceipt)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +282,7 @@ func (c *SvmCodec) DecodeReceiptExecApp(rawReceipt []byte) (*ReceiptExecApp, err
 	return v.(*ReceiptExecApp), nil
 }
 
-func (c *SvmCodec) decodeReceipt(rawReceipt []byte) (interface{}, error) {
+func decodeReceipt(rawReceipt []byte) (interface{}, error) {
 	decodeReceiptJson, err := json.Marshal(struct {
 		Data string `json:"data"`
 	}{
@@ -296,12 +292,12 @@ func (c *SvmCodec) decodeReceipt(rawReceipt []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	bufPtr, err := c.newBuffer(decodeReceiptJson)
+	bufPtr, err := newBuffer(decodeReceiptJson)
 	if err != nil {
 		return nil, err
 	}
 
-	fn, err := c.instance.Exports.GetFunction("wasm_decode_receipt")
+	fn, err := instance.Exports.GetFunction("wasm_decode_receipt")
 	if err != nil {
 		return nil, err
 	}
@@ -311,18 +307,18 @@ func (c *SvmCodec) decodeReceipt(rawReceipt []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	ret, err := c.loadBuffer(retBufPtr.(int32))
+	ret, err := loadBuffer(retBufPtr.(int32))
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("## receipt json: %s\n", ret)
+	//fmt.Printf("## receipt json: %s\n", ret)
 
-	return c.decodeReceiptJSON(ret)
+	return decodeReceiptJSON(ret)
 
 }
 
-func (c *SvmCodec) decodeReceiptJSON(jsonReceipt []byte) (interface{}, error) {
+func decodeReceiptJSON(jsonReceipt []byte) (interface{}, error) {
 	var v map[string]interface{}
 	if err := json.Unmarshal(jsonReceipt, &v); err != nil {
 		return nil, err
@@ -391,7 +387,10 @@ func (c *SvmCodec) decodeReceiptJSON(jsonReceipt []byte) (interface{}, error) {
 
 			strLogs := make([]string, len(logs))
 			for i, log := range logs {
-				strLogs[i] = log.(string)
+				log := log.(map[string]interface{})
+				code := log["code"].(float64)
+				msg := log["msg"].(string)
+				strLogs[i] = fmt.Sprintf("(code: %v, msg: %v)", code, msg)
 			}
 
 			return &common.ReceiptSpawnApp{
@@ -412,7 +411,10 @@ func (c *SvmCodec) decodeReceiptJSON(jsonReceipt []byte) (interface{}, error) {
 
 			strLogs := make([]string, len(logs))
 			for i, log := range logs {
-				strLogs[i] = log.(string)
+				log := log.(map[string]interface{})
+				code := log["code"].(float64)
+				msg := log["msg"].(string)
+				strLogs[i] = fmt.Sprintf("(code: %v, msg: %v)", code, msg)
 			}
 
 			return &common.ReceiptExecApp{
@@ -429,14 +431,14 @@ func (c *SvmCodec) decodeReceiptJSON(jsonReceipt []byte) (interface{}, error) {
 	}
 }
 
-func (c *SvmCodec) newBuffer(data []byte) (int32, error) {
+func newBuffer(data []byte) (int32, error) {
 	length := int32(len(data))
-	ptr, err := c.bufferAlloc(length)
+	ptr, err := bufferAlloc(length)
 	if err != nil {
 		return 0, err
 	}
 
-	bufferLength, err := c.bufferLength(ptr)
+	bufferLength, err := bufferLength(ptr)
 	if err != nil {
 		return 0, err
 	}
@@ -444,12 +446,12 @@ func (c *SvmCodec) newBuffer(data []byte) (int32, error) {
 		panic(fmt.Sprintf("allocated buffer size isn't sufficient; allocated: %v, got: %v", length, bufferLength))
 	}
 
-	dataPtr, err := c.bufferDataPtr(ptr)
+	dataPtr, err := bufferDataPtr(ptr)
 	if err != nil {
 		return 0, err
 	}
 
-	mem, err := c.instance.Exports.GetMemory("memory")
+	mem, err := instance.Exports.GetMemory("memory")
 	if err != nil {
 		return 0, err
 	}
@@ -459,18 +461,18 @@ func (c *SvmCodec) newBuffer(data []byte) (int32, error) {
 	return ptr, nil
 }
 
-func (c *SvmCodec) loadBuffer(ptr int32) ([]byte, error) {
-	length, err := c.bufferLength(ptr)
+func loadBuffer(ptr int32) ([]byte, error) {
+	length, err := bufferLength(ptr)
 	if err != nil {
 		return nil, err
 	}
 
-	dataPtr, err := c.bufferDataPtr(ptr)
+	dataPtr, err := bufferDataPtr(ptr)
 	if err != nil {
 		return nil, err
 	}
 
-	mem, err := c.instance.Exports.GetMemory("memory")
+	mem, err := instance.Exports.GetMemory("memory")
 	if err != nil {
 		return nil, err
 	}
@@ -480,17 +482,17 @@ func (c *SvmCodec) loadBuffer(ptr int32) ([]byte, error) {
 	data := buf[1:]
 
 	switch marker {
-	case ErrMarker:
+	case markerErr:
 		return nil, errors.New(string(data))
-	case OkMarker:
+	case markerOk:
 		return data, nil
 	default:
 		panic("invalid marker")
 	}
 }
 
-func (c *SvmCodec) bufferAlloc(size int32) (int32, error) {
-	fn, err := c.instance.Exports.GetFunction("wasm_alloc")
+func bufferAlloc(size int32) (int32, error) {
+	fn, err := instance.Exports.GetFunction("wasm_alloc")
 	if err != nil {
 		return 0, err
 	}
@@ -499,8 +501,8 @@ func (c *SvmCodec) bufferAlloc(size int32) (int32, error) {
 	return buf.(int32), err
 }
 
-func (c *SvmCodec) bufferLength(buf int32) (int32, error) {
-	fn, err := c.instance.Exports.GetFunction("wasm_buffer_length")
+func bufferLength(buf int32) (int32, error) {
+	fn, err := instance.Exports.GetFunction("wasm_buffer_length")
 	if err != nil {
 		return 0, err
 	}
@@ -509,19 +511,14 @@ func (c *SvmCodec) bufferLength(buf int32) (int32, error) {
 	return bufLen.(int32), err
 }
 
-func (c *SvmCodec) bufferDataPtr(buf int32) (int32, error) {
-	fn, err := c.instance.Exports.GetFunction("wasm_buffer_data")
+func bufferDataPtr(buf int32) (int32, error) {
+	fn, err := instance.Exports.GetFunction("wasm_buffer_data")
 	if err != nil {
 		return 0, err
 	}
 
 	dataPtr, err := fn(buf)
 	return dataPtr.(int32), err
-}
-
-func codecWasmFilePath() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(file, "../../svm/svm_codec.wasm")
 }
 
 func mustDecodeHexString(s string) []byte {

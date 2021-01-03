@@ -40,18 +40,12 @@ func (rb RuntimeBuilder) WithDiskKV(path string) RuntimeBuilder {
 	return rb
 }
 
-func (rb RuntimeBuilder) WithHost(p unsafe.Pointer) RuntimeBuilder {
-	rb.host = p
-	return rb
-}
-
 func (rb RuntimeBuilder) Build() (Runtime, error) {
 	var p unsafe.Pointer
 
 	if err := cSvmMemoryRuntimeCreate(
 		&p,
 		rb.memKV,
-		rb.host,
 		rb.imports,
 	); err != nil {
 		return Runtime{}, fmt.Errorf("failed to create runtime: %v", err)

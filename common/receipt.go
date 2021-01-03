@@ -9,15 +9,14 @@ type ReceiptDeployTemplate struct {
 	GasUsed      uint64
 }
 
-func (r ReceiptDeployTemplate) String() string {
-	return fmt.Sprintf(
-		"DeployTemplate receipt:\n"+
-			"  Success: %v\n"+
-			"  Version: %v\n"+
-			"  Template Address: %v\n"+
-			"  Gas Used: %v",
-		r.Success, r.Version, r.TemplateAddr, r.GasUsed)
-}
+//func (r ReceiptDeployTemplate) String() string {
+//	return fmt.Sprintf(
+//			"Success: %v\n"+
+//			"Version: %v\n"+
+//			"Template Address: %v\n"+
+//			"Gas Used: %v",
+//		r.Success, r.Version, r.TemplateAddr, r.GasUsed)
+//}
 
 type ReceiptSpawnApp struct {
 	Success    bool
@@ -29,15 +28,15 @@ type ReceiptSpawnApp struct {
 	GasUsed    uint64
 }
 
-func (r ReceiptSpawnApp) String() string {
-	return fmt.Sprintf(
-		"SpawnApp receipt:\n"+
-			"  App Address: %x\n"+
-			"  State: %x\n"+
-			"  Returndata: %x\n"+
-			"  Gas Used: %v\n",
-		r.State, r.AppAddr, r.Returndata, r.GasUsed)
-}
+//func (r ReceiptSpawnApp) String() string {
+//	return fmt.Sprintf(
+//			"App Address: %x\n"+
+//			"State: %x\n"+
+//			"Returndata: %x\n"+
+//			"Gas Used: %v\n" +
+//			"Logs: %#v\n",
+//		r.State, r.AppAddr, r.Returndata, r.GasUsed, r.Logs)
+//}
 
 type ReceiptExecApp struct {
 	Success    bool
@@ -50,10 +49,9 @@ type ReceiptExecApp struct {
 
 func (r ReceiptExecApp) String() string {
 	return fmt.Sprintf(
-		"ExecApp receipt:\n"+
-			"  New State: %x\n"+
-			"  Returndata: %x\n"+
-			"  Logs: %v\n"+
-			"  GasUsed: %v\n",
+		"New State: %x\n"+
+			"Returndata: %x\n"+
+			"Logs: %v\n"+
+			"GasUsed: %v\n",
 		r.NewState, r.Returndata, r.Logs, r.GasUsed)
 }
