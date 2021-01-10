@@ -631,38 +631,4 @@ svm_result_t svm_estimate_exec_app(uint64_t *estimation,
                                    svm_byte_array bytes,
                                    svm_byte_array *error);
 
-/**
- * Constructs a new raw `app_template` transaction.
- *
- */
-svm_result_t svm_encode_app_template(svm_byte_array *app_template,
-                                     uint32_t version,
-                                     svm_byte_array name,
-                                     svm_byte_array code,
-                                     svm_byte_array data,
-                                     svm_byte_array *error);
-
-/**
- * Constructs a new raw `spawn_app` transaction.
- *
- */
-svm_result_t svm_encode_spawn_app(svm_byte_array *spawn_app,
-                                  uint32_t version,
-                                  svm_byte_array template_addr,
-                                  svm_byte_array name,
-                                  svm_byte_array ctor_name,
-                                  svm_byte_array calldata,
-                                  svm_byte_array *error);
-
-/**
- * Constructs a new raw `app_tx` transaction.
- *
- */
-svm_result_t svm_encode_app_tx(svm_byte_array *app_tx,
-                               uint32_t version,
-                               svm_byte_array app_addr,
-                               svm_byte_array func_name,
-                               svm_byte_array calldata,
-                               svm_byte_array *error);
-
 #endif /* SVM_H */

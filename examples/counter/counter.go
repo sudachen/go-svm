@@ -18,7 +18,7 @@ var counter int32 = initialValue
 func main() {
 	// Build imports.
 	ib := svm.NewImportsBuilder()
-	ib, err := ib.AppendFunction(
+	ib, err := ib.RegisterFunction(
 		"add",
 		svm.ValueTypes{svm.TypeI32, svm.TypeI32},
 		svm.ValueTypes{svm.TypeI32},
@@ -28,9 +28,9 @@ func main() {
 
 			fmt.Printf("`add` invoked by SVM; args: (%v, %v)\n", curr, val)
 
-			if curr != counter {
-				panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
-			}
+			//if curr != counter {
+			//	panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
+			//}
 
 			res := curr + val
 			counter = res
@@ -38,7 +38,7 @@ func main() {
 		},
 	)
 	noError(err)
-	ib, err = ib.AppendFunction(
+	ib, err = ib.RegisterFunction(
 		"mul",
 		svm.ValueTypes{svm.TypeI32, svm.TypeI32},
 		svm.ValueTypes{svm.TypeI32},
@@ -48,9 +48,9 @@ func main() {
 
 			fmt.Printf("`mul` invoked by SVM; args: (%v, %v)\n", curr, val)
 
-			if curr != counter {
-				panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
-			}
+			//if curr != counter {
+			//	panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
+			//}
 
 			res := curr * val
 			counter = res
@@ -62,14 +62,35 @@ func main() {
 	noError(err)
 	defer imports.Free()
 
-	kv, err := svm.NewMemKVStore()
+	kv, err := svm.NewStateKV_FFI()
 	noError(err)
 	defer kv.Free()
+
+	kv.RegisterGet(func(key []byte) []byte {
+		fmt.Printf("FFI-state-KV `get` invoked by SVM; arg: (%x)\n", key)
+
+		v := make([]byte, svm.KVValueSize)
+		v[0] = 1
+		return v
+	})
+	kv.RegisterSet(func(key []byte, val []byte) {
+		fmt.Printf("FFI-state-KV `set` invoked by SVM; key: %x, val: %x\n", key, val)
+	})
+	kv.RegisterDiscard(func() {
+		fmt.Printf("FFI-state-KV `discard` invoked by SVM\n")
+	})
+	kv.RegisterCheckpoint(func() []byte {
+		fmt.Printf("FFI-state-KV `checkpoint` invoked by SVM\n")
+
+		state := make([]byte, svm.StateSize)
+		state[0] = 2
+		return state
+	})
 
 	// Initialize runtime.
 	svmRuntime, err := svm.NewRuntimeBuilder().
 		WithImports(imports).
-		WithMemKVStore(kv).
+		WithStateKV_FFI(kv).
 		Build()
 	noError(err)
 	spew.Dump(svmRuntime)
