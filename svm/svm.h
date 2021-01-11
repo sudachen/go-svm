@@ -240,9 +240,18 @@ svm_result_t svm_memory_state_kv_create(void **kv);
  * unsafe extern "C" fn set(key_ptr: *const u8, key_len: u32, value_ptr: *const u8, value_len: u32) {}
  * unsafe extern "C" fn discard() {}
  * unsafe extern "C" fn checkpoint(state: *mut u8) {}
+ * unsafe extern "C" fn head(state: *mut u8) {}
  *
  * let mut kv = std::ptr::null_mut();
- * let res = unsafe { svm_ffi_state_kv_create(&mut kv, get, set, discard, checkpoint) };
+ * let res = unsafe {
+ *   svm_ffi_state_kv_create(
+ *     &mut kv,
+ *     get,
+ *     set,
+ *     discard,
+ *     checkpoint,
+ *     head)
+ * };
  * assert!(res.is_ok());
  * ```
  *
@@ -251,7 +260,8 @@ svm_result_t svm_ffi_state_kv_create(void **state_kv,
                                      void (*get_fn)(const uint8_t*, uint32_t, uint8_t*, uint32_t*),
                                      void (*set_fn)(const uint8_t*, uint32_t, const uint8_t*, uint32_t),
                                      void (*discard_fn)(void),
-                                     void (*checkpoint_fn)(uint8_t*));
+                                     void (*checkpoint_fn)(uint8_t*),
+                                     void (*head_fn)(uint8_t*));
 
 /**
  * Frees an in-memory key-value.
@@ -630,5 +640,39 @@ svm_result_t svm_estimate_exec_app(uint64_t *estimation,
                                    void *runtime,
                                    svm_byte_array bytes,
                                    svm_byte_array *error);
+
+/**
+ * Constructs a new raw `app_template` transaction.
+ *
+ */
+svm_result_t svm_encode_app_template(svm_byte_array *app_template,
+                                     uint32_t version,
+                                     svm_byte_array name,
+                                     svm_byte_array code,
+                                     svm_byte_array data,
+                                     svm_byte_array *error);
+
+/**
+ * Constructs a new raw `spawn_app` transaction.
+ *
+ */
+svm_result_t svm_encode_spawn_app(svm_byte_array *spawn_app,
+                                  uint32_t version,
+                                  svm_byte_array template_addr,
+                                  svm_byte_array name,
+                                  svm_byte_array ctor_name,
+                                  svm_byte_array calldata,
+                                  svm_byte_array *error);
+
+/**
+ * Constructs a new raw `app_tx` transaction.
+ *
+ */
+svm_result_t svm_encode_app_tx(svm_byte_array *app_tx,
+                               uint32_t version,
+                               svm_byte_array app_addr,
+                               svm_byte_array func_name,
+                               svm_byte_array calldata,
+                               svm_byte_array *error);
 
 #endif /* SVM_H */

@@ -86,6 +86,13 @@ func main() {
 		state[0] = 2
 		return state
 	})
+	kv.RegisterHead(func() []byte {
+		fmt.Printf("FFI-state-KV `head` invoked by SVM\n")
+
+		state := make([]byte, svm.StateSize)
+		state[0] = 3
+		return state
+	})
 
 	// Initialize runtime.
 	svmRuntime, err := svm.NewRuntimeBuilder().

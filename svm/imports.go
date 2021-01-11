@@ -8,37 +8,35 @@ import (
 )
 
 type Imports struct {
-	p unsafe.Pointer
+	_inner unsafe.Pointer
+
+	// envs holds import functions environment objects.
+	// `svm_trampoline` will get the respective environment object raw pointer directly from SVM.
+	// tracking it here is needed so that it won't get GC-ed.
+	envs []*functionEnvironment
 }
 
 func (imports Imports) Free() {
 	cSvmImportsDestroy(imports)
 }
 
-// ImportFunction represents a SVM runtime imported function.
+// ImportFunction represents an SVM-runtime imported function.
 type ImportFunction struct {
-	// An implementation must be of type:
-	// `func(ctx unsafe.Pointer, arguments ...interface{}) interface{}`.
-	// It represents the real function implementation written in Go.
-	//implementation interface{}
+	// implementation represents the real function implementation written in Go.
+	implementation hostFunction
 
-	// The namespace of the imported function.
+	// namespace is the imported function WebAssembly namespace.
 	namespace string
 
-	env unsafe.Pointer
-
-	// The function implementation signature as a WebAssembly signature.
+	// params is the WebAssembly signature of the function implementation params.
 	params ValueTypes
 
-	// The function implementation signature as a WebAssembly signature.
+	// returns is the WebAssembly signature of the function implementation returns.
 	returns ValueTypes
 }
 
 type ImportsBuilder struct {
-	// All imports.
-	imports map[string]ImportFunction
-
-	// Current namespace where to register the import.
+	imports          map[string]ImportFunction
 	currentNamespace string
 }
 
@@ -55,44 +53,45 @@ func (ib ImportsBuilder) Namespace(namespace string) ImportsBuilder {
 	return ib
 }
 
-func (ib ImportsBuilder) AppendFunction(name string, params ValueTypes, returns ValueTypes, function hostFunction) (ImportsBuilder, error) {
+func (ib ImportsBuilder) RegisterFunction(name string, params ValueTypes, returns ValueTypes, function hostFunction) (ImportsBuilder, error) {
 	//params, returns, err := validateImport(name, impl)
 	//if err != nil {
 	//	return ImportsBuilder{}, err
 	//}
 
-	env := functionEnvironment{
-		hostFunctionStoreIndex: hostFunctionStore.store(function),
-	}
-
-	namespace := ib.currentNamespace
 	ib.imports[name] = ImportFunction{
-		namespace,
-		unsafe.Pointer(&env),
+		function,
+		ib.currentNamespace,
 		params,
 		returns,
 	}
-
-	fmt.Printf("POINTER: %v\n", ib.imports[name].env)
 
 	return ib, nil
 }
 
 func (ib ImportsBuilder) Build() (Imports, error) {
 	imports := Imports{}
+	imports.envs = make([]*functionEnvironment, 0)
 
-	if res := cSvmImportsAlloc(&imports.p, uint(len(ib.imports))); res != cSvmSuccess {
+	if res := cSvmImportsAlloc(&imports._inner, uint(len(ib.imports))); res != cSvmSuccess {
 		return Imports{}, fmt.Errorf("failed to allocate imports")
 	}
 
-	for importName, importFunction := range ib.imports {
+	for imprtName, imprt := range ib.imports {
+		env := functionEnvironment{
+			hostFunctionStoreIndex: hostFunctionStore.set(imprt.implementation),
+		}
+		imports.envs = append(imports.envs, &env)
+
 		if err := cSvmImportFuncNew(
 			imports,
-			importFunction.namespace,
-			importName,
-			importFunction,
+			imprt.namespace,
+			imprtName,
+			unsafe.Pointer(&env),
+			imprt.params,
+			imprt.returns,
 		); err != nil {
-			return Imports{}, fmt.Errorf("failed to build import `%v`: %v", importName, err)
+			return Imports{}, fmt.Errorf("failed to build import `%v`: %v", imprtName, err)
 		}
 	}
 

@@ -2,6 +2,7 @@ package svm
 
 import "C"
 import (
+	"reflect"
 	"unsafe"
 )
 
@@ -19,10 +20,19 @@ func (b GoBytes) CBytesClone() CBytes {
 	return CBytes{data: p, len: len(b)}
 }
 
+func (b GoBytes) CBytesAlias() CBytes {
+	header := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	return CBytes{data: unsafe.Pointer(header.Data), len: len(b)}
+}
+
 // CBytes represents a C array allocated via the C allocator.
 type CBytes struct {
 	data unsafe.Pointer
 	len  int
+}
+
+func NewCBytes(data unsafe.Pointer, len int) CBytes {
+	return CBytes{data, len}
 }
 
 // GoBytesClone is using the built-in `GoBytes` cgo function to

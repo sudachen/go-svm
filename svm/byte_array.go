@@ -6,14 +6,15 @@ import (
 	"unsafe"
 )
 
-func charToBytes(dest []byte, src *C.char) {
-	n := len(dest)
-	copy(dest, (*(*[1024]byte)(unsafe.Pointer(src)))[:n:n])
-}
-
 func bytesCloneToSvmByteArray(b []byte) cSvmByteArray {
 	var ba cSvmByteArray
 	ba.FromBytesClone(b)
+	return ba
+}
+
+func bytesAliasToSvmByteArray(b []byte) cSvmByteArray {
+	var ba cSvmByteArray
+	ba.FromBytesAlias(b)
 	return ba
 }
 
@@ -27,6 +28,16 @@ func (ba *cSvmByteArray) FromBytesClone(b []byte) {
 	}
 
 	cBytes := GoBytes(b).CBytesClone()
+	ba.bytes = (*cUchar)(cBytes.data)
+	ba.length = (cUint)(cBytes.len)
+}
+
+func (ba *cSvmByteArray) FromBytesAlias(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+
+	cBytes := GoBytes(b).CBytesAlias()
 	ba.bytes = (*cUchar)(cBytes.data)
 	ba.length = (cUint)(cBytes.len)
 }
