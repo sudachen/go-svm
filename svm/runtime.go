@@ -7,6 +7,7 @@ import (
 )
 
 type Runtime struct {
+	// _inner is a pointer to an SVM-managed heap allocation.
 	_inner unsafe.Pointer
 }
 
@@ -24,17 +25,17 @@ func NewRuntimeBuilder() RuntimeBuilder {
 	return RuntimeBuilder{}
 }
 
-func (rb RuntimeBuilder) WithImports(imports Imports) RuntimeBuilder {
+func (rb RuntimeBuilder) WithImports(imports *Imports) RuntimeBuilder {
 	rb.imports = imports._inner
 	return rb
 }
 
-func (rb RuntimeBuilder) WithStateKV_Mem(kv StateKV_Mem) RuntimeBuilder {
+func (rb RuntimeBuilder) WithStateKV_Mem(kv *StateKV_Mem) RuntimeBuilder {
 	rb.kv = kv._inner
 	return rb
 }
 
-func (rb RuntimeBuilder) WithStateKV_FFI(kv StateKV_FFI) RuntimeBuilder {
+func (rb RuntimeBuilder) WithStateKV_FFI(kv *StateKV_FFI) RuntimeBuilder {
 	rb.kv = kv._inner
 	return rb
 }

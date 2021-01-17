@@ -123,7 +123,7 @@ func cSvmFFIStateKVCreate(p *unsafe.Pointer) cSvmResultT {
 }
 
 // kvHandlers is a static container for the KV-ops handlers, written in Go,
-// to be invoked from the unsafe cgo-exported handlers.
+// to be invoked from the unsafe, cgo-exported handlers.
 var kvHandlers = struct {
 	get        func([]byte) []byte
 	set        func([]byte, []byte)
@@ -133,6 +133,7 @@ var kvHandlers = struct {
 }{}
 
 type StateKV_FFI struct {
+	// _inner is a pointer to an SVM-managed heap allocation.
 	_inner unsafe.Pointer
 }
 

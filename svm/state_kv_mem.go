@@ -6,6 +6,7 @@ import (
 )
 
 type StateKV_Mem struct {
+	// _inner is a pointer to an SVM-managed heap allocation.
 	_inner unsafe.Pointer
 }
 

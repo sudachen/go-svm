@@ -19,8 +19,8 @@ type (
 
 const cSvmSuccess = (C.svm_result_t)(C.SVM_SUCCESS)
 
-func cSvmImportsAlloc(imports *unsafe.Pointer, count uint) cSvmResultT {
-	return (cSvmResultT)(C.svm_imports_alloc(imports, C.uint(count)))
+func cSvmImportsAlloc(p *unsafe.Pointer, count uint) cSvmResultT {
+	return (cSvmResultT)(C.svm_imports_alloc(p, C.uint(count)))
 }
 
 func cSvmMemoryRuntimeCreate(runtime *unsafe.Pointer, kv, imports unsafe.Pointer) error {

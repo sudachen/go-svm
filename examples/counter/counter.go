@@ -17,28 +17,26 @@ var counter int32 = initialValue
 
 func main() {
 	// Build imports.
-	ib := svm.NewImportsBuilder()
-	ib, err := ib.RegisterFunction(
-		"add",
-		svm.ValueTypes{svm.TypeI32, svm.TypeI32},
-		svm.ValueTypes{svm.TypeI32},
-		func(args []svm.Value) ([]svm.Value, error) {
-			curr := args[0].ToI32()
-			val := args[1].ToI32()
+	imports, err := svm.NewImportsBuilder().
+		RegisterFunction(
+			"add",
+			svm.ValueTypes{svm.TypeI32, svm.TypeI32},
+			svm.ValueTypes{svm.TypeI32},
+			func(args []svm.Value) ([]svm.Value, error) {
+				curr := args[0].ToI32()
+				val := args[1].ToI32()
 
-			fmt.Printf("`add` invoked by SVM; args: (%v, %v)\n", curr, val)
+				fmt.Printf("`add` invoked by SVM; args: (%v, %v)\n", curr, val)
 
-			//if curr != counter {
-			//	panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
-			//}
+				//if curr != counter {
+				//	panic(fmt.Sprintf("closure counter value mismatch: expected: %v, found: %v", curr, counter))
+				//}
 
-			res := curr + val
-			counter = res
-			return []svm.Value{svm.I32(res)}, nil
-		},
-	)
-	noError(err)
-	ib, err = ib.RegisterFunction(
+				res := curr + val
+				counter = res
+				return []svm.Value{svm.I32(res)}, nil
+			},
+		).RegisterFunction(
 		"mul",
 		svm.ValueTypes{svm.TypeI32, svm.TypeI32},
 		svm.ValueTypes{svm.TypeI32},
@@ -56,9 +54,7 @@ func main() {
 			counter = res
 			return []svm.Value{svm.I32(res)}, nil
 		},
-	)
-	noError(err)
-	imports, err := ib.Build()
+	).Build()
 	noError(err)
 	defer imports.Free()
 
@@ -97,7 +93,7 @@ func main() {
 	// Initialize runtime.
 	svmRuntime, err := svm.NewRuntimeBuilder().
 		WithImports(imports).
-		WithStateKV_FFI(kv).
+		WithStateKV_FFI(&kv).
 		Build()
 	noError(err)
 	spew.Dump(svmRuntime)
