@@ -1,21 +1,10 @@
 package svm
 
-const AddressLen = 20
+const AddressLength = 20
+type Address [AddressLength]byte
 
-type Address [AddressLen]byte
-
-func bytesToAddress(b []byte) Address {
-	var addr Address
-	if len(b) <= AddressLen {
-		copy(addr[:], b)
-	} else {
-		copy(addr[:], b[:AddressLen])
-	}
-
-	return addr
-}
-
-func svmByteArrayCloneToAddress(ba cSvmByteArray) Address {
-	b := svmByteArrayCloneToBytes(ba)
-	return bytesToAddress(b)
+func StringAddress(str string) Address {
+	a := Address{}
+	copy(a[:],str)
+	return a
 }

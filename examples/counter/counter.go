@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"go-svm/svm"
+	"go-svm/svm1"
 	"io/ioutil"
 	"unsafe"
 )
@@ -26,13 +26,13 @@ func inc(ctx unsafe.Pointer, value int32) {
 	closure.value += value
 
 	// or the runtime's provided host object pointer.
-	host := (*counter)(svm.InstanceContextHostGet(ctx))
+	host := (*counter)(svm1.InstanceContextHostGet(ctx))
 	host.value += value
 }
 
 //export get
 func get(ctx unsafe.Pointer) int32 {
-	host := (*counter)(svm.InstanceContextHostGet(ctx))
+	host := (*counter)(svm1.InstanceContextHostGet(ctx))
 
 	// Host and closure variable should be synced.
 	if host.value != closure.value {
@@ -52,7 +52,7 @@ var host counter
 
 func main() {
 	// 1) Initialize runtime.
-	ib := svm.NewImportsBuilder()
+	ib := svm1.NewImportsBuilder()
 	ib, err := ib.AppendFunction("inc", inc, C.inc)
 	noError(err)
 	ib, err = ib.AppendFunction("get", get, C.get)
@@ -61,13 +61,13 @@ func main() {
 	noError(err)
 	defer imports.Free()
 
-	kv, err := svm.NewMemKVStore()
+	kv, err := svm1.NewMemKVStore()
 	noError(err)
 	defer kv.Free()
 
 	host := unsafe.Pointer(&host)
 
-	runtime, err := svm.NewRuntimeBuilder().
+	runtime, err := svm1.NewRuntimeBuilder().
 		WithImports(imports).
 		WithMemKVStore(kv).
 		WithHost(host).
@@ -77,17 +77,17 @@ func main() {
 	fmt.Printf("1) Runtime: %v\n\n", runtime)
 
 	version := 0
-	hostCtx := svm.NewHostCtx().Encode()
+	hostCtx := svm1.NewHostCtx().Encode()
 	gasMetering := false
 	gasLimit := uint64(0)
 
 	// 2) Deploy Template.
 	// TODO: add on-the-fly wat2wasm translation
 	code, err := ioutil.ReadFile("counter_template.wasm")
-	dataLayout := svm.DataLayout{4}
+	dataLayout := svm1.DataLayout{4}
 	noError(err)
 	name := "name"
-	author := svm.Address{}
+	author := svm1.Address{}
 	deployTemplateResult, err := deployTemplate(
 		runtime,
 		code,
@@ -102,14 +102,14 @@ func main() {
 	fmt.Printf("2) %v\n", deployTemplateResult)
 
 	// 3) Spawn App.
-	creator := svm.Address{}
+	creator := svm1.Address{}
 	spawnAppResult, err := spawnApp(
 		runtime,
 		version,
 		deployTemplateResult.TemplateAddr,
 		uint16(0),
 		[]byte(nil),
-		svm.Values{svm.I32(5)},
+		svm1.Values{svm1.I32(5)},
 		creator,
 		hostCtx,
 		gasMetering,
@@ -125,7 +125,7 @@ func main() {
 		spawnAppResult.AppAddr,
 		uint16(0),
 		[]byte(nil),
-		svm.Values{svm.I32(5)},
+		svm1.Values{svm1.I32(5)},
 		spawnAppResult.InitialState,
 		hostCtx,
 		gasMetering,
@@ -140,7 +140,7 @@ func main() {
 		spawnAppResult.AppAddr,
 		uint16(1),
 		[]byte(nil),
-		svm.Values(nil),
+		svm1.Values(nil),
 		execAppResult.NewState,
 		hostCtx,
 		gasMetering,
@@ -155,7 +155,7 @@ func main() {
 		spawnAppResult.AppAddr,
 		uint16(2),
 		[]byte(nil),
-		svm.Values{svm.I32(25)},
+		svm1.Values{svm1.I32(25)},
 		execAppResult.NewState,
 		hostCtx,
 		gasMetering,
@@ -170,7 +170,7 @@ func main() {
 		spawnAppResult.AppAddr,
 		uint16(3),
 		[]byte(nil),
-		svm.Values(nil),
+		svm1.Values(nil),
 		execAppResult.NewState,
 		hostCtx,
 		gasMetering,
@@ -180,17 +180,17 @@ func main() {
 }
 
 func deployTemplate(
-	runtime svm.Runtime,
+	runtime svm1.Runtime,
 	code []byte,
-	dataLayout svm.DataLayout,
+	dataLayout svm1.DataLayout,
 	version int,
 	name string,
-	author svm.Address,
+	author svm1.Address,
 	hostCtx []byte,
 	gasMetering bool,
 	gasLimit uint64,
-) (*svm.DeployTemplateResult, error) {
-	appTemplate, err := svm.EncodeAppTemplate(
+) (*svm1.DeployTemplateResult, error) {
+	appTemplate, err := svm1.EncodeAppTemplate(
 		version,
 		name,
 		code,
@@ -200,11 +200,11 @@ func deployTemplate(
 		return nil, err
 	}
 
-	if err = svm.ValidateTemplate(runtime, appTemplate); err != nil {
+	if err = svm1.ValidateTemplate(runtime, appTemplate); err != nil {
 		return nil, err
 	}
 
-	res, err := svm.DeployTemplate(
+	res, err := svm1.DeployTemplate(
 		runtime,
 		appTemplate,
 		author,
@@ -220,18 +220,18 @@ func deployTemplate(
 }
 
 func spawnApp(
-	runtime svm.Runtime,
+	runtime svm1.Runtime,
 	version int,
-	templateAddr svm.Address,
+	templateAddr svm1.Address,
 	ctorIndex uint16,
 	ctorBuffer []byte,
-	ctorArgs svm.Values,
-	creator svm.Address,
+	ctorArgs svm1.Values,
+	creator svm1.Address,
 	hostCtx []byte,
 	gasMetering bool,
 	gasLimit uint64,
-) (*svm.SpawnAppResult, error) {
-	spawnApp, err := svm.EncodeSpawnApp(
+) (*svm1.SpawnAppResult, error) {
+	spawnApp, err := svm1.EncodeSpawnApp(
 		version,
 		templateAddr,
 		ctorIndex,
@@ -242,11 +242,11 @@ func spawnApp(
 		return nil, err
 	}
 
-	if err = svm.ValidateApp(runtime, spawnApp); err != nil {
+	if err = svm1.ValidateApp(runtime, spawnApp); err != nil {
 		return nil, err
 	}
 
-	res, err := svm.SpawnApp(
+	res, err := svm1.SpawnApp(
 		runtime,
 		spawnApp,
 		creator,
@@ -262,18 +262,18 @@ func spawnApp(
 }
 
 func execApp(
-	runtime svm.Runtime,
+	runtime svm1.Runtime,
 	version int,
-	appAddr svm.Address,
+	appAddr svm1.Address,
 	funcIndex uint16,
 	funcBuffer []byte,
-	funcArgs svm.Values,
+	funcArgs svm1.Values,
 	appState []byte,
 	hostCtx []byte,
 	gasMetering bool,
 	gasLimit uint64,
-) (*svm.ExecAppResult, error) {
-	appTx, err := svm.EncodeAppTx(
+) (*svm1.ExecAppResult, error) {
+	appTx, err := svm1.EncodeAppTx(
 		version,
 		appAddr,
 		funcIndex,
@@ -284,11 +284,11 @@ func execApp(
 		return nil, err
 	}
 
-	if _, err = svm.ValidateAppTx(runtime, appTx); err != nil {
+	if _, err = svm1.ValidateAppTx(runtime, appTx); err != nil {
 		return nil, err
 	}
 
-	execAppResult, err := svm.ExecApp(runtime, appTx, appState, hostCtx, gasMetering, gasLimit)
+	execAppResult, err := svm1.ExecApp(runtime, appTx, appState, hostCtx, gasMetering, gasLimit)
 	if err != nil {
 		return nil, err
 	}

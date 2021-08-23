@@ -1,65 +1,81 @@
 package svm
 
+/*
+#include "svm.h"
+#include "memory.h"
+*/
 import "C"
-import (
-	"fmt"
-	"unsafe"
-)
+import "unsafe"
+
 
 type Runtime struct {
-	p unsafe.Pointer
+	svmRuntime unsafe.Pointer
 }
 
-func (r Runtime) Free() {
-	cSvmRuntimeDestroy(r)
-}
-
-type RuntimeBuilder struct {
-	imports    unsafe.Pointer
-	memKV      unsafe.Pointer
-	diskKVPath string
-	host       unsafe.Pointer
-}
-
-func NewRuntimeBuilder() RuntimeBuilder {
-	return RuntimeBuilder{}
-}
-
-func (rb RuntimeBuilder) WithImports(imports Imports) RuntimeBuilder {
-	rb.imports = imports.p
-	return rb
-}
-
-func (rb RuntimeBuilder) WithMemKVStore(kv MemKVStore) RuntimeBuilder {
-	rb.memKV = kv.p
-	return rb
-}
-
-func (rb RuntimeBuilder) WithDiskKV(path string) RuntimeBuilder {
-	rb.diskKVPath = path
-	return rb
-}
-
-func (rb RuntimeBuilder) WithHost(p unsafe.Pointer) RuntimeBuilder {
-	rb.host = p
-	return rb
-}
-
-func (rb RuntimeBuilder) Build() (Runtime, error) {
-	var p unsafe.Pointer
-
-	if err := cSvmMemoryRuntimeCreate(
-		&p,
-		rb.memKV,
-		rb.host,
-		rb.imports,
-	); err != nil {
-		return Runtime{}, fmt.Errorf("failed to create runtime: %v", err)
+func NewRuntime() (*Runtime, error) {
+	rt := &Runtime{}
+	err := Error{}
+	if res := C.svm_memory_runtime_create(&rt.svmRuntime,err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return nil, err.ToError("can't create new SVM runtime: ")
 	}
-
-	return Runtime{p}, nil
+	return rt, nil
 }
 
-func InstanceContextHostGet(ctx unsafe.Pointer) unsafe.Pointer {
-	return cSvmInstanceContextHostGet(ctx)
+func (rt *Runtime) Destroy() {
+	if rt.svmRuntime != nil {
+		C.svm_runtime_destroy(rt.svmRuntime)
+		rt.svmRuntime = nil
+	}
+}
+
+func (rt *Runtime) Close() error {
+	rt.Destroy()
+	return nil
+}
+
+func (rt *Runtime) ValidateCall(msg *Message) error {
+	err := Error{}
+	if res := C.svm_validate_call(rt.svmRuntime,msg.byteArray,err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return err.ToError("failed to validate call message: ")
+	}
+	return nil
+}
+
+func (rt *Runtime) Call(envelope *Envelope, msg *Message, ctx *Context) (*Receipt, error) {
+	var err Error
+	rcpt := &ByteArray{}
+	if res := C.svm_validate_call(rt.svmRuntime, msg.byteArray, err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return nil, err.ToError("failed to validate call message: ")
+	}
+	if res := C.svm_call(&rcpt.byteArray, rt.svmRuntime, envelope.byteArray, msg.byteArray, ctx.byteArray, err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return nil, err.ToError("failed to validate call message: ")
+	}
+	return nil, nil
+}
+
+func (rt *Runtime) ValidateSpawn(msg *Message) error {
+	err := Error{}
+	if res := C.svm_validate_call(rt.svmRuntime,msg.byteArray,err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return err.ToError("failed to call contract: ")
+	}
+	return nil
+}
+
+func (rt *Runtime) Spawn(envelope *Envelope, msg *Message, ctx *Context) (*Receipt, error) {
+	var err Error
+	rcpt := &ByteArray{}
+	if res := C.svm_validate_spawn(rt.svmRuntime, msg.byteArray, err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return nil, err.ToError("failed to validate call message: ")
+	}
+	if res := C.svm_spawn(&rcpt.byteArray, rt.svmRuntime, envelope.byteArray, msg.byteArray, ctx.byteArray, err.ptr()); res != C.SVM_SUCCESS {
+		defer err.Destroy()
+		return nil, err.ToError("failed spawn contract: ")
+	}
+	return nil, nil
 }
